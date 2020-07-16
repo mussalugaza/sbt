@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nbaa-db
+  labels:
+    type: local
+    name: nbaa-db
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/db-storage/nbaa-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nbaa-db
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: nbaa-db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-nbaa-claim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  selector:
+    matchLabels:
+      name: nbaa-db
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nbaa-db-secret
+data:
+  POSTGRES_USER: cG9zdGdyZXM=
+  POSTGRES_PASSWORD: QGVnYTEyMzQ1Ng==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nbaa-db-config
+data:
+  POSTGRES_DB: nbaa
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: nbaa-db
+spec:
+  replicas: 1 
+  selector:
+    matchLabels:
+      app: nbaa-db      
+  template:
+    metadata:
+      labels:
+        app: nbaa-db
+    spec:
+      containers:
+        - image: "postgres:9.6.2"
+          name: nbaa-db
+          envFrom:
+            - configMapRef:
+                 name: nbaa-db-config
+            - secretRef:
+                 name: nbaa-db-secret
+          ports:
+            - containerPort: 5432
+              name: nbaa-db
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+           claimName: pg-nbaa-claim

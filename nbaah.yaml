@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: nbaaapp
+  name: nbaaapp
+spec:
+  type: NodePort      
+  ports:
+  - nodePort: 32767 
+    port: 8443
+    targetPort: 8443
+  selector:
+    app: nbaaapp
+  type: NodePort 
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nbaa-secret
+data:
+  DB_USER: cG9zdGdyZXM=
+  DB_PASS: QGVnYTEyMzQ1Ng==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nbaa-config
+data:
+  ACTIVE_PROFILE: "production"
+  DATABASE_URL: "jdbc:postgresql://nbaa-db:5432/nbaa"
+---
+apiVersion: apps/v1 # for versions before 1.8.0 use apps/v1beta1
+kind: Deployment
+metadata:
+  name: nbaaapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nbaaapp
+  template:
+    metadata:
+      labels:
+        app: nbaaapp
+    spec:
+      containers:
+      - name: nbaaapp
+        image: reg.eganet.go.tz:5000/nbaa:v7
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8443
+        envFrom:
+        - configMapRef: 
+            name: nbaa-config
+        - secretRef: 
+             name: nbaa-secret
+      imagePullSecrets:
+      - name: regcred
+      volumes:
+        - name: nbaaapp-storage
+          persistentVolumeClaim:
+            claimName: nbaapostgres-pvclaim  
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nbaapostgres
+  labels:
+    type: local
+    name: nbaapostgres
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/tests-storage/dbstorage/nbaapostgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nbaapostgres-pvclaim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      name: nbaapostgres
+  resources:
+    requests:
+      storage: 10Gi
